@@ -250,8 +250,11 @@ class LongitudinalMpc:
     d_zone_tf = interp(self.desired_TF, TFs, [1.6, 1.3, 1.])
     # KRKeegan adjustments to improve sluggish acceleration these also
     # alter deceleration in the same range
-    j_ego_v_ego = interp(v_ego, v_ego_bps, [.05, 1.])
-    a_change_v_ego = interp(v_ego, v_ego_bps, [.05, 1.])
+    # raised low-speed floor (.05 -> .15) to penalize jerk near standstill for
+    # smoother launches/stops, while keeping enough response to avoid a hesitant
+    # standstill launch
+    j_ego_v_ego = interp(v_ego, v_ego_bps, [.15, 1.])
+    a_change_v_ego = interp(v_ego, v_ego_bps, [.15, 1.])
     # Select the appropriate min/max of the options
     j_ego = min(j_ego_tf, j_ego_v_ego)
     a_change = min(a_change_tf, a_change_v_ego)

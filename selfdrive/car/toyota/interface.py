@@ -281,6 +281,14 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStarting = 0.2  # needs to be > or == vEgoStopping
       ret.stopAccel = -2.0  # Toyota requests -0.4 when stopped
       ret.stoppingDecelRate = 0.8  # reach stopping target smoothly - seems to take 0.5 seconds to go from 0 to -0.4
+
+      # Corolla Hybrid TSS2: softer PI gains and gentler stop for a smoother,
+      # more human-like feel on this hybrid powertrain
+      if candidate == CAR.COROLLAH_TSS2:
+        ret.longitudinalTuning.kpV = [0.9, 0.75, 0.55]
+        ret.longitudinalTuning.kiV = [.22, .16, .14, .12, .08]
+        ret.stopAccel = -0.8
+        ret.stoppingDecelRate = 0.4
     else:
       set_long_tune(ret.longitudinalTuning, LongTunes.TSS)
 
