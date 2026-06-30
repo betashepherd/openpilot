@@ -128,57 +128,16 @@ def manager_thread() -> None:
 
   params = Params()
 
-  dp_logger = params.get_bool('dp_logger')
   dp_jetson = params.get_bool('dp_jetson')
-
-  # save boot log
-  if dp_logger:
-    subprocess.call("./bootlog", cwd=os.path.join(BASEDIR, "selfdrive/loggerd"))
 
   ignore: List[str] = []
 
-  if params.get_bool('dp_panda_no_gps'):
-    params.put_bool('dp_otisserv', False)
-    params.put_bool('dp_mapd', False)
-    params.put_bool('dp_gpxd', False)
-    dp_otisserv = False
-    dp_mapd = False
-    dp_gpxd = False
-    ignore += ['ubloxd']
-  else:
-    dp_otisserv = params.get_bool('dp_otisserv')
-    dp_mapd = params.get_bool('dp_mapd')
-    dp_gpxd = params.get_bool('dp_gpxd')
-
-  if not params.get_bool('dp_reg'):
-    params.put_bool('dp_athenad', False)
-    params.put_bool('dp_uploader', False)
-    dp_athenad = False
-    dp_uploader = False
-  else:
-    dp_athenad = params.get_bool('dp_athenad')
-    dp_uploader = params.get_bool('dp_uploader')
+  ignore += ['ubloxd', 'logcatd', 'loggerd', 'proclogd', 'logmessaged', 'tombstoned',
+             'manage_athenad', 'deleter', 'mapd', 'otisserv', 'navd', 'gpxd',
+             'dashcamd', 'updated', 'uploader']
 
   if dp_jetson:
     ignore += ['dmonitoringmodeld', 'dmonitoringd']
-  if not params.get_bool('dp_dashcamd'):
-    ignore += ['dashcamd']
-  if not params.get_bool('dp_updated'):
-    ignore += ['updated']
-  if not dp_logger:
-    ignore += ['logcatd', 'loggerd', 'proclogd', 'logmessaged', 'tombstoned']
-  if not dp_athenad:
-    ignore += ['manage_athenad']
-  if not dp_athenad and not dp_uploader:
-    ignore += ['deleter']
-  if not dp_mapd:
-    ignore += ['mapd']
-  if not dp_otisserv:
-    ignore += ['otisserv']
-    if not TICI:
-      ignore += ['navd']
-  if not dp_mapd and not dp_otisserv and not dp_gpxd:
-    ignore += ['gpxd']
   if params.get("DongleId", encoding='utf8') in (None, UNREGISTERED_DONGLE_ID):
     ignore += ["manage_athenad", "uploader"]
   if os.getenv("NOBOARD") is not None:

@@ -1,7 +1,7 @@
 import numpy as np
 import math
 from cereal import log
-from common.numpy_fast import interp
+from common.numpy_fast import interp, clip
 from common.params import Params
 from common.realtime import sec_since_boot
 from selfdrive.config import Conversions as CV
@@ -24,7 +24,15 @@ _EVAL_START = 20.  # mts. Distance ahead where to start evaluating vision curvat
 _EVAL_LENGHT = 150.  # mts. Distance ahead where to stop evaluating vision curvature.
 _EVAL_RANGE = np.arange(_EVAL_START, _EVAL_LENGHT, _EVAL_STEP)
 
-_A_LAT_REG_MAX = 2.  # Maximum lateral acceleration
+# Adaptive comfort lateral acceleration (replaces a fixed max). The target lat-acc is
+# scaled down at high speed and when path confidence is low, then clamped for safety.
+_A_LAT_BASE = 2.0            # baseline comfort lateral acceleration (m/s^2)
+_A_LAT_REG_MAX_HARD = 2.3    # hard safety ceiling, never exceeded
+_A_LAT_REG_MIN = 1.2         # floor, avoid crawling through curves
+_A_LAT_V_FACTOR_BP = [10., 30.]     # m/s
+_A_LAT_V_FACTOR_V = [1.1, 0.85]     # gentler (smaller) at higher speed
+_A_LAT_CONF_FACTOR_BP = [0.3, 0.8]  # combined lane-line probability
+_A_LAT_CONF_FACTOR_V = [0.7, 1.0]   # slow down when path confidence is low
 
 _NO_OVERSHOOT_TIME_HORIZON = 4.  # s. Time to use for velocity desired based on a_target when not overshooting.
 
@@ -97,7 +105,7 @@ class VisionTurnController():
     self._CP = CP
     self._op_enabled = False
     self._gas_pressed = False
-    self._is_enabled = self._params.get_bool("TurnVisionControl")
+    self._is_enabled = True  # hardcoded ON: TurnVisionControl forced enabled
     self._last_params_update = 0.
     self._v_cruise_setpoint = 0.
     self._v_ego = 0.
@@ -141,16 +149,18 @@ class VisionTurnController():
     self._max_pred_lat_acc = 0.
     self._v_overshoot_distance = 200.
     self._lat_acc_overshoot_ahead = False
+    self._a_lat_reg_max = _A_LAT_BASE
 
   def _update_params(self):
     time = sec_since_boot()
     if time > self._last_params_update + 5.0:
-      self._is_enabled = self._params.get_bool("TurnVisionControl")
+      self._is_enabled = True  # hardcoded ON: TurnVisionControl forced enabled
       self._last_params_update = time
 
   def _update_calculations(self, sm):
     # Get path polynomial aproximation for curvature estimation from model data.
     path_poly = None
+    lane_prob = 1.0  # default optimistic when path is not derived from lane lines
     model_data = sm['modelV2'] if sm.valid.get('modelV2', False) else None
     lat_planner_data = sm['lateralPlan'] if sm.valid.get('lateralPlan', False) else None
 
@@ -181,6 +191,9 @@ class VisionTurnController():
       l_prob *= l_std_mod
       r_prob *= r_std_mod
 
+      # combined lane confidence for the adaptive comfort-speed (lower => slow down)
+      lane_prob = min(l_prob, r_prob)
+
       # Find path from lanes as the average center lane only if min probability on both lanes is above threshold.
       if l_prob > _MIN_LANE_PROB and r_prob > _MIN_LANE_PROB:
         c_y = width_pts / 2 + lll_y
@@ -196,22 +209,28 @@ class VisionTurnController():
     if path_poly is None:
       path_poly = np.array([0., 0., 0., 0.])
 
+    # Adaptive comfort lateral-acceleration target (replaces the fixed _A_LAT_REG_MAX):
+    # gentler at high speed and when path confidence is low, always within safety clamps.
+    a_lat = _A_LAT_BASE * interp(self._v_ego, _A_LAT_V_FACTOR_BP, _A_LAT_V_FACTOR_V) \
+            * interp(lane_prob, _A_LAT_CONF_FACTOR_BP, _A_LAT_CONF_FACTOR_V)
+    self._a_lat_reg_max = clip(a_lat, _A_LAT_REG_MIN, _A_LAT_REG_MAX_HARD)
+
     current_curvature = abs(
       sm['carState'].steeringAngleDeg * CV.DEG_TO_RAD / (self._CP.steerRatio * self._CP.wheelbase))
     self._current_lat_acc = current_curvature * self._v_ego**2
-    self._max_v_for_current_curvature = math.sqrt(_A_LAT_REG_MAX / current_curvature) if current_curvature > 0 \
+    self._max_v_for_current_curvature = math.sqrt(self._a_lat_reg_max / current_curvature) if current_curvature > 0 \
       else V_CRUISE_MAX * CV.KPH_TO_MS
 
     pred_curvatures = eval_curvature(path_poly, _EVAL_RANGE)
     max_pred_curvature = np.amax(pred_curvatures)
     self._max_pred_lat_acc = self._v_ego**2 * max_pred_curvature
 
-    max_curvature_for_vego = _A_LAT_REG_MAX / max(self._v_ego, 0.1)**2
+    max_curvature_for_vego = self._a_lat_reg_max / max(self._v_ego, 0.1)**2
     lat_acc_overshoot_idxs = np.nonzero(pred_curvatures >= max_curvature_for_vego)[0]
     self._lat_acc_overshoot_ahead = len(lat_acc_overshoot_idxs) > 0
 
     if self._lat_acc_overshoot_ahead:
-      self._v_overshoot = min(math.sqrt(_A_LAT_REG_MAX / max_pred_curvature), self._v_cruise_setpoint)
+      self._v_overshoot = min(math.sqrt(self._a_lat_reg_max / max_pred_curvature), self._v_cruise_setpoint)
       self._v_overshoot_distance = max(lat_acc_overshoot_idxs[0] * _EVAL_STEP + _EVAL_START, _EVAL_STEP)
       _debug(f'TVC: High LatAcc. Dist: {self._v_overshoot_distance:.2f}, v: {self._v_overshoot * CV.MS_TO_KPH:.2f}')
 
