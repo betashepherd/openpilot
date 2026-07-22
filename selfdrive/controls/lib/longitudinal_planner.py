@@ -42,13 +42,16 @@ DP_ACCEL_SPORT = 2
 # accel profile by @arne182 modified by cgw
 # NORMAL retuned as a "smooth" balanced curve: gentle low-speed launch with
 # enough mid/high-speed authority for highway merging (city+highway balance).
-_DP_CRUISE_MIN_V = [-0.05, -0.15, -0.3, -0.5, -0.5, -0.35, -0.2]
-_DP_CRUISE_MIN_V_ECO = [-0.01, -0.1, -0.2, -0.3, -0.4, -0.2, -0.09]
-_DP_CRUISE_MIN_V_SPORT = [-0.1, -0.2, -0.4, -0.5, -0.5, -0.25, -0.1]
-_DP_CRUISE_MIN_BP = [0.0, 3.0, 5.0, 20.0, 33.3, 40.0, 55.0]
+# Launch capped at 1.7 to match softened Corolla Hybrid PI (avoids integrator
+# windup); MIN grid densified at city speeds (10/15 m/s); ECO launch fixed
+# (was 3.5 > NORMAL); 55 m/s tails flattened (above CN highway limit).
+_DP_CRUISE_MIN_V = [-0.05, -0.15, -0.25, -0.35, -0.45, -0.5, -0.5, -0.35, -0.1]
+_DP_CRUISE_MIN_V_ECO = [-0.01, -0.1, -0.2, -0.23, -0.27, -0.3, -0.4, -0.2, -0.09]
+_DP_CRUISE_MIN_V_SPORT = [-0.1, -0.2, -0.4, -0.43, -0.47, -0.5, -0.5, -0.25, -0.1]
+_DP_CRUISE_MIN_BP = [0.0, 3.0, 5.0, 10.0, 15.0, 20.0, 33.3, 40.0, 55.0]
 
-_DP_CRUISE_MAX_V = [2.0, 1.6, 1.3, 1.1, 0.95, 0.85, 0.75, 0.65, 0.55, 0.3]
-_DP_CRUISE_MAX_V_ECO = [3.5, 1.65, 1.25, 0.85, 0.65, 0.55, 0.45, 0.42, 0.24, 0.09]
+_DP_CRUISE_MAX_V = [1.7, 1.5, 1.3, 1.1, 0.95, 0.85, 0.75, 0.65, 0.55, 0.1]
+_DP_CRUISE_MAX_V_ECO = [1.5, 1.4, 1.25, 0.85, 0.65, 0.55, 0.45, 0.42, 0.24, 0.09]
 _DP_CRUISE_MAX_V_SPORT = [3.5, 3.5, 2.5, 1.5, 2.0, 2.0, 2.0, 1.5, 1.0, 0.5]
 _DP_CRUISE_MAX_BP = [0., 3, 6., 8., 11., 15., 20., 25., 30., 55.]
 
